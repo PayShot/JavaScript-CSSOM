@@ -5,9 +5,12 @@ Create multiple Cascading Style Sheets Object Model in JavaScript.
 
 This object can be very useful to generate your own CSS documents instead of concatenating strings.
 
-Examples:
+The script adds all the indentation required and can minify the output too.
+
+Example:
 ---------
 
+```javascript
 // Create CSSOM object
 var style = new CSSOM('style.css');
 
@@ -46,3 +49,4 @@ console.write(style.toString(true));
  *  p{text-height:100%;font-family:'Arial-Bold';font-size:1em;color:rgb(255,128,0)}
  *  .bold{font-weight:bold}
  */
+```
