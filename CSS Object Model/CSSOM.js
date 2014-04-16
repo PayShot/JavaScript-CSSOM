@@ -1,8 +1,13 @@
 ﻿/*
  * Title         : Cascading Style Sheets Object Model
  * Author        : Ramzi Komati 
- * Version       : 1.1
- * Last Modified : April 10th, 2014
+ * Version       : 1.2
+ *                 - Create a non-static CSS Object Model
+ *                 - Added hash function to assign a unique ID for each mutal property
+ *                 - Append a Selector Object from a CSSOM to another
+ *                 - Added the option to merge mutal declarations between two selectors
+ *                 - Bug fixes
+ * Last Modified : April 15th, 2014
  *
  */
 
@@ -13,7 +18,7 @@ var CSSOM = function CSSOM(CSSOM_Name)
     // Validate parameters
     if(typeof CSSOM_Name === 'undefined')
     {
-        throw new Error('Unable to create a CSS Object Model since no name has been defined.');
+        CSSOM_Name = '';
     }
 
     // These are the datatypes of value's decalarations
@@ -34,37 +39,40 @@ var CSSOM = function CSSOM(CSSOM_Name)
     // This variable is used to increase performance of the script
     var cssHash = {};
 
-    if(CSS_Object_Models.hasOwnProperty(CSSOM_Name))
+    if(CSSOM_Name != '')
     {
-        css = CSS_Object_Models[CSSOM_Name].css;
-        cssHash = CSS_Object_Models[CSSOM_Name].cssHash;
-    }
-    else
-    {
-        CSS_Object_Models[CSSOM_Name] = {
-            'css'     : {},
-            'cssHash' : {}
-        };
+        if(CSS_Object_Models.hasOwnProperty(CSSOM_Name))
+        {
+            css = CSS_Object_Models[CSSOM_Name].css;
+            cssHash = CSS_Object_Models[CSSOM_Name].cssHash;
+        }
+        else
+        {
+            CSS_Object_Models[CSSOM_Name] = {
+                'css'     : {},
+                'cssHash' : {}
+            };
+        }
     }
 
-    var Selector = function Selector(selector)
+    var Selector = function Selector(selectorName)
     {
         // Get the ID of the selector
-        this.id = css[selector].id;
+        this.id = css[selectorName].id;
 
         // Get the name of the selector
-        this.name = selector;
+        this.name = selectorName;
 
         // Get the class name of the selector
-        this.className = (selector.substr(0, 1) == '.' ? selector.substr(1, selector.length - 1) : '');
+        this.className = (selectorName.substr(0, 1) == '.' ? selectorName.substr(1, selectorName.length - 1) : '');
+
+        // Get all the selectors declarations
+        this.declarations = css[selectorName].declarations;
 
         // Append a new declaration to the selector
         this.appendDeclaration = function(arg1, arg2, arg3)
         {
-            // Generate an id with the following format ??????
-            var id = Math.random() * 999999 +  100000;
-
-            if(typeof css[selector] === 'undefined')
+            if(typeof css[selectorName] === 'undefined')
             {
                 throw new Error('Unable to append new declarations: selector does not exist.');
             }
@@ -76,24 +84,95 @@ var CSSOM = function CSSOM(CSSOM_Name)
                 }
                 else
                 {
-                    css[selector].declarations.push({
-                        'id'       : id,
+                    /*css[selectorName].declarations.push({
+                        'id'       : 'h' + (arg1 + arg2 + arg3).toString().hash(),
+                        'property' : arg1,
+                        'value'    : arg2,
+                        'datatype' : arg3
+                    });*/
+
+                    this.declarations.push({
+                        'id'       : 'h' + (arg1 + arg2 + arg3).toString().hash(),
                         'property' : arg1,
                         'value'    : arg2,
                         'datatype' : arg3
                     });
 
-                    CSS_Object_Models[CSSOM_Name].css = css;
+                    if(CSSOM_Name != '')
+                    {
+                        CSS_Object_Models[CSSOM_Name].css = css;
+                    }
                 }
             }
         };
+    };
 
+    // Append a selector to the CSSOM object model
+    this.appendSelector = function(selector, mergeDeclarations)
+    {
+        if(typeof mergeDeclarations === 'undefined')
+        {
+            mergeDeclarations = true;
+        }
+
+        if(selector.constructor.name == 'Selector')
+        {
+            if(css.hasOwnProperty(selector.name))
+            {
+                if(mergeDeclarations)
+                {
+                    var currentDeclarations = css[selector.name].declarations;
+                    var selectorDeclarations = selector.declarations;
+
+                    for(var i = 0; i < selectorDeclarations.length; i++)
+                    {
+                        var newDeclarationFound = true;
+                        for(var j = 0; j < currentDeclarations.length; j++)
+                        {
+                            if(selectorDeclarations[i].id == currentDeclarations[j].id)
+                            {
+                                newDeclarationFound = false;
+                            }
+                        }
+                        if(newDeclarationFound)
+                        {
+                            css[selector.name].declarations.push(selectorDeclarations[i]);
+                        }
+                    }
+                }
+
+                // If mergeDeclaration is set to false, than replace the original declarations
+                // of the original selector.
+                else
+                {
+                    css[selector.name] = {
+                        'id'           : selector.id,
+                        'declarations' : selector.declarations
+                    }
+                }
+            }
+            else
+            {
+                css[selector.name] = {
+                    'id'           : selector.id,
+                    'declarations' : selector.declarations
+                }
+            }
+        }
+        else
+        {
+            throw new Error('Invalid type of argument selector. Unable to append a selector to the CSS Object Model.');
+        }
     };
 
     // Set a new selector to the CSSOM object model
-    this.setSelector = function(selector, id)
+    this.setSelector = function(selectorName, id)
     {
-        if(css.hasOwnProperty(selector))
+        if(typeof selectorName === 'undefined')
+        {
+            throw new Error('Invalid type of argument selectorName, can\'t be empty.');
+        }
+        if(css.hasOwnProperty(selectorName))
         {
             return -1;
         }
@@ -102,39 +181,41 @@ var CSSOM = function CSSOM(CSSOM_Name)
             // Create a new declaration for the css selector object
             if(typeof id === 'undefined')
             {
-                // Generate a random id
-                id = Math.random() * 999999 +  100000;
+                id = 'h' + selectorName.toString().hash();
             }
 
-            css[selector] = {
+            css[selectorName] = {
                 'id'           : id,
                 'declarations' : new Array()
             };
 
-            cssHash[id] = selector;
+            cssHash[id] = selectorName;
 
-            CSS_Object_Models[CSSOM_Name].css = css;
-            CSS_Object_Models[CSSOM_Name].cssHash = cssHash;
+            if(CSSOM_Name != '')
+            {
+                CSS_Object_Models[CSSOM_Name].css = css;
+                CSS_Object_Models[CSSOM_Name].cssHash = cssHash;
+            }
 
-            return new Selector(selector);
+            return new Selector(selectorName);
         }
     };
 
     // Get a specific selector from the CSSOM object model
-    this.getSelector = function(selector)
+    this.getSelector = function(selectorName)
     {
-        if(typeof selector === 'undefined')
+        if(typeof selectorName === 'undefined')
         {
             throw new Error('Unable to getSelector: Missing parameters.');
         }
         else
         {
             // If the argument is numeric than retrieve the selector name from cssHash
-            if(isNumeric(selector))
+            if(isNumeric(selectorName))
             {
-                if(cssHash.hasOwnProperty(selector))
+                if(cssHash.hasOwnProperty(selectorName))
                 {
-                    selector = cssHash[selector]
+                    selectorName = cssHash[selectorName]
                 }
                 else
                 {
@@ -142,15 +223,7 @@ var CSSOM = function CSSOM(CSSOM_Name)
                 }
             }
 
-            // Return the Selector object
-            if(css.hasOwnProperty(selector))
-            {
-                return new Selector(selector);
-            }
-            else
-            {
-                return -1;
-            }
+ 
         }
     };
 
@@ -162,7 +235,7 @@ var CSSOM = function CSSOM(CSSOM_Name)
 
         if(typeof minify === 'undefined' || minify == false)
         {
-            for(selector in css)
+            for(var selector in css)
             {
                 str += selector + ' {\n';
                 for(var i = 0; i < css[selector].declarations.length; i++)
@@ -172,21 +245,25 @@ var CSSOM = function CSSOM(CSSOM_Name)
                     switch(css[selector].declarations[i].datatype)
                     {
                         case this.DataType.PIXELS:
+
                             str += css[selector].declarations[i].value;
                             str += 'px'
                             break;
 
                         case this.DataType.EM:
+
                             str += css[selector].declarations[i].value;
                             str += 'em'
                             break;
 
                         case this.DataType.PERCENTAGE:
+
                             str += css[selector].declarations[i].value;
                             str += '%';
                             break;
 
                         case this.DataType.RGB:
+
                             str += 'rgb('
                             str += css[selector].declarations[i].value[0] + ', ';
                             str += css[selector].declarations[i].value[1] + ', ';
@@ -196,18 +273,22 @@ var CSSOM = function CSSOM(CSSOM_Name)
 
                         case this.DataType.NUMBER:
                         case this.DataType.STRING:
+
                             str += css[selector].declarations[i].value;
                             break;
 
                         case this.DataType.FONT:
+
                             str += "'" + css[selector].declarations[i].value + "'";
                             break;
 
                         case this.DataType.URL:
+
                             str += "url('" + css[selector].declarations[i].value + "')";
                             break;
 
                         default:
+
                             throw new Error('Invalid data type for CSS declaration rule: <' + css[selector].declarations[i].datatype) + '>';
                     }
                     str += ';\n';
@@ -219,7 +300,7 @@ var CSSOM = function CSSOM(CSSOM_Name)
         // Minify CSS
         else
         {
-            for(selector in css)
+            for(var selector in css)
             {
                 str += selector + '{';
                 for(var i = 0; i < css[selector].declarations.length; i++)
@@ -229,6 +310,7 @@ var CSSOM = function CSSOM(CSSOM_Name)
                     switch(css[selector].declarations[i].datatype)
                     {
                         case this.DataType.PIXELS:
+
                             str += css[selector].declarations[i].value;
                             if(parseFloat(css[selector].declarations[i].value) != 0)
                             {
@@ -237,6 +319,7 @@ var CSSOM = function CSSOM(CSSOM_Name)
                             break;
 
                         case this.DataType.EM:
+
                             str += css[selector].declarations[i].value;
                             if(parseFloat(css[selector].declarations[i].value) != 0)
                             {
@@ -245,6 +328,7 @@ var CSSOM = function CSSOM(CSSOM_Name)
                             break;
 
                         case this.DataType.PERCENTAGE:
+
                             str += css[selector].declarations[i].value;
                             if(parseFloat(css[selector].declarations[i].value) != 0)
                             {
@@ -253,6 +337,7 @@ var CSSOM = function CSSOM(CSSOM_Name)
                             break;
 
                         case this.DataType.RGB:
+
                             str += 'rgb('
                             str += css[selector].declarations[i].value[0] + ',';
                             str += css[selector].declarations[i].value[1] + ',';
@@ -262,18 +347,22 @@ var CSSOM = function CSSOM(CSSOM_Name)
 
                         case this.DataType.NUMBER:
                         case this.DataType.STRING:
+
                             str += css[selector].declarations[i].value;
                             break;
 
                         case this.DataType.FONT:
+
                             str += "'" + css[selector].declarations[i].value + "'";
                             break;
 
                         case this.DataType.URL:
+
                             str += "url('" + css[selector].declarations[i].value + "')";
                             break;
 
                         default:
+
                             throw new Error('Invalid data type for CSS declaration rule: <' + css[selector].declarations[i].datatype) + '>';
                     }
 
@@ -286,6 +375,22 @@ var CSSOM = function CSSOM(CSSOM_Name)
             }
         }
         return str;
+    };
+
+    String.prototype.hash = function()
+    {
+        var hash = 0;
+        if(this.length == 0) 
+        {
+            return hash;
+        }
+        for(var i = 0; i < this.length; i++) 
+        {
+            var char = this.charCodeAt(i);
+            hash = ((hash<<5) - hash) + char;
+            hash = hash & hash; // Convert to 32bit integer
+        }
+        return hash;
     };
 
     function isNumeric(n) 
